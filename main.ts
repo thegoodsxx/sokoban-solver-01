@@ -133,11 +133,42 @@ export function solveRoom(level, limit = 700000) {
   return moves;
 }
 
+function roomsOf(level) {
+  const live = liveSquares(level), row = Math.floor(level.player / level.w), cut = new Uint8Array(level.wall.length);
+  for (let p = row * level.w; p < (row + 1) * level.w; p++) if (!level.wall[p] && !live[p]) cut[p] = 1;
+  if (level.boxes.some((b) => cut[b])) return null;
+  const part = new Int32Array(level.wall.length).fill(-1), rooms = [];
+  for (let start = 0; start < level.wall.length; start++) {
+    if (level.wall[start] || cut[start] || part[start] >= 0) continue;
+    const squares = [start], room = { squares, boxes: [], goals: [], done: false }; part[start] = rooms.length;
+    for (let i = 0; i < squares.length; i++) for (const [dx, dy] of DIRS) { const q = squares[i] + dy * level.w + dx; if (!level.wall[q] && !cut[q] && part[q] < 0) { part[q] = rooms.length; squares.push(q); } }
+    rooms.push(room);
+  }
+  for (const b of level.boxes) rooms[part[b]]?.boxes.push(b);
+  for (const g of level.goals) if (part[g] >= 0) rooms[part[g]].goals.push(g);
+  if (level.goals.some((g) => part[g] < 0) || rooms.some((r) => r.boxes.length !== r.goals.length)) return null;
+  return rooms.filter((r) => r.boxes.length);
+}
+
+function solveLevel(level) {
+  const rooms = roomsOf(level); if (!rooms) return solveRoom(level);
+  let player = level.player, moves = '';
+  for (const room of rooms) {
+    const wall = level.wall.slice();
+    for (const other of rooms) if (other !== room) for (const b of other.done ? other.goals : other.boxes) wall[b] = 1;
+    const sub = { w: level.w, h: level.h, wall, goals: room.goals.slice().sort((a, b) => a - b), boxes: room.boxes.slice().sort((a, b) => a - b), player };
+    const part = solveRoom(sub); if (part === null) return null;
+    const result = replay(sub, part); if (!result.legal || !result.solved) return null;
+    moves += part; player = result.player; room.done = true;
+  }
+  return moves;
+}
+
 function main() {
   const input = process.env.MAKEFUN_INPUT_DIR ?? '/input', output = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
   for (const id of readdirSync(input).sort()) {
     const level = parseLevel(readFileSync(join(input, id, 'level.txt'), 'utf8'));
-    const moves = solveRoom(level) ?? '';
+    const moves = solveLevel(level) ?? '';
     const checked = replay(level, moves);
     mkdirSync(join(output, id), { recursive: true });
     writeFileSync(join(output, id, 'solution.txt'), checked.legal && checked.solved ? moves + '\n' : '\n');
