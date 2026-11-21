@@ -98,7 +98,8 @@ function matching(boxes, distances) {
 }
 
 // A* on pushes. The player region's lowest square makes equivalent walking states identical.
-export function solveRoom(level, limit = 700000) {
+// A room retained by the generator proves within 250k BFS states; headroom handles A* reopenings deterministically.
+export function solveRoom(level, limit = 1000000) {
   const size = level.wall.length, goal = new Uint8Array(size), live = liveSquares(level); for (const g of level.goals) goal[g] = 1;
   if (level.boxes.some((b) => !live[b])) return null;
   const distances = level.goals.map((g) => { const d = new Int32Array(size).fill(999999), q = [g]; d[g] = 0; for (let i = 0; i < q.length; i++) for (const [dx, dy] of DIRS) { const step = dy * level.w + dx, n = q[i] - step; if (!level.wall[n] && !level.wall[n - step] && d[n] === 999999) { d[n] = d[q[i]] + 1; q.push(n); } } return d; });
